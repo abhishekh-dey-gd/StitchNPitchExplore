@@ -4,6 +4,11 @@ import RandomGuideSelector from './components/RandomGuideSelector';
 import PasswordModal from './components/PasswordModal';
 import WinnerDisplay from './components/WinnerDisplay';
 import WinnerHistory from './components/WinnerHistory';
+import ElitePitchAudit from './components/ElitePitchAudit';
+import ElitePasswordModal from './components/ElitePasswordModal';
+import EliteWinnerDisplay from './components/EliteWinnerDisplay';
+import EliteFailAnimation from './components/EliteFailAnimation';
+import EliteWinnerHistory from './components/EliteWinnerHistory';
 import WinHistoryDashboard from './components/WinHistoryDashboard';
 import ExportData from './components/ExportData';
 import BackupRestore from './components/BackupRestore';
@@ -11,9 +16,9 @@ import ConfettiAnimation from './components/ConfettiAnimation';
 import FailAnimation from './components/FailAnimation';
 import DynamicOrbs from './components/DynamicOrbs';
 import Navigation from './components/Navigation';
-import { Guide, Winner, Loser, ADMIN_PASSWORD } from './config/data';
+import { Guide, Winner, Loser, EliteWinner, ADMIN_PASSWORD } from './config/data';
 
-type AppTab = 'selection' | 'winners';
+type AppTab = 'selection' | 'winners' | 'elite-audit' | 'elite-winners';
 
 function App() {
   const [currentTab, setCurrentTab] = useState<AppTab>('selection');
@@ -21,10 +26,17 @@ function App() {
   const [currentWinner, setCurrentWinner] = useState<Winner | null>(null);
   const [winners, setWinners] = useState<Winner[]>([]);
   const [losers, setLosers] = useState<Loser[]>([]);
+  const [eliteWinners, setEliteWinners] = useState<EliteWinner[]>([]);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [isElitePasswordModalOpen, setIsElitePasswordModalOpen] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [showFailAnimation, setShowFailAnimation] = useState(false);
+  const [showEliteConfetti, setShowEliteConfetti] = useState(false);
+  const [showEliteFailAnimation, setShowEliteFailAnimation] = useState(false);
   const [failedGuideName, setFailedGuideName] = useState('');
+  const [failedEliteName, setFailedEliteName] = useState('');
+  const [selectedElite, setSelectedElite] = useState<Winner | null>(null);
+  const [currentEliteWinner, setCurrentEliteWinner] = useState<EliteWinner | null>(null);
   const [loading, setLoading] = useState(true);
   
   // New modal states
@@ -36,6 +48,7 @@ function App() {
   useEffect(() => {
     loadWinners();
     loadLosers();
+    loadEliteWinners();
   }, []);
 
   const loadWinners = async () => {
@@ -102,6 +115,37 @@ function App() {
         const localLosers = JSON.parse(savedLosers);
         localLosers.sort((a: Loser, b: Loser) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
         setLosers(localLosers);
+      }
+    }
+  };
+
+  const loadEliteWinners = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('elite_winners')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('Error loading elite winners:', error);
+        // Fallback to localStorage if Supabase fails
+        const savedEliteWinners = localStorage.getItem('stitchAndPitchEliteWinners');
+        if (savedEliteWinners) {
+          const localEliteWinners = JSON.parse(savedEliteWinners);
+          localEliteWinners.sort((a: EliteWinner, b: EliteWinner) => new Date(a.elite_timestamp).getTime() - new Date(b.elite_timestamp).getTime());
+          setEliteWinners(localEliteWinners);
+        }
+      } else {
+        setEliteWinners(data || []);
+        localStorage.setItem('stitchAndPitchEliteWinners', JSON.stringify(data || []));
+      }
+    } catch (error) {
+      console.error('Error connecting to database:', error);
+      const savedEliteWinners = localStorage.getItem('stitchAndPitchEliteWinners');
+      if (savedEliteWinners) {
+        const localEliteWinners = JSON.parse(savedEliteWinners);
+        localEliteWinners.sort((a: EliteWinner, b: EliteWinner) => new Date(a.elite_timestamp).getTime() - new Date(b.elite_timestamp).getTime());
+        setEliteWinners(localEliteWinners);
       }
     }
   };
@@ -174,6 +218,42 @@ function App() {
     }
   };
 
+  const saveEliteWinnerToDatabase = async (eliteWinner: EliteWinner) => {
+    try {
+      const { data, error } = await supabase
+        .from('elite_winners')
+        .insert([{
+          guide_id: eliteWinner.guide_id,
+          name: eliteWinner.name,
+          department: eliteWinner.department,
+          supervisor: eliteWinner.supervisor,
+          timestamp: eliteWinner.timestamp,
+          elite_timestamp: eliteWinner.elite_timestamp,
+          chat_ids: eliteWinner.chat_ids || [],
+          elite_chat_ids: eliteWinner.elite_chat_ids || []
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error saving elite winner to database:', error);
+        // Fallback to localStorage
+        const updatedEliteWinners = [...eliteWinners, eliteWinner].sort((a, b) => new Date(a.elite_timestamp).getTime() - new Date(b.elite_timestamp).getTime());
+        setEliteWinners(updatedEliteWinners);
+        localStorage.setItem('stitchAndPitchEliteWinners', JSON.stringify(updatedEliteWinners));
+      } else {
+        // Reload elite winners from database to get the latest data
+        await loadEliteWinners();
+      }
+    } catch (error) {
+      console.error('Error connecting to database:', error);
+      // Fallback to localStorage
+      const updatedEliteWinners = [...eliteWinners, eliteWinner].sort((a, b) => new Date(a.elite_timestamp).getTime() - new Date(b.elite_timestamp).getTime());
+      setEliteWinners(updatedEliteWinners);
+      localStorage.setItem('stitchAndPitchEliteWinners', JSON.stringify(updatedEliteWinners));
+    }
+  };
+
   const deleteWinnerFromDatabase = async (winnerId: string) => {
     try {
       const { error } = await supabase
@@ -197,6 +277,32 @@ function App() {
       const updatedWinners = winners.filter(winner => winner.id !== winnerId);
       setWinners(updatedWinners);
       localStorage.setItem('stitchAndPitchWinners', JSON.stringify(updatedWinners));
+    }
+  };
+
+  const deleteEliteWinnerFromDatabase = async (eliteWinnerId: string) => {
+    try {
+      const { error } = await supabase
+        .from('elite_winners')
+        .delete()
+        .eq('id', eliteWinnerId);
+
+      if (error) {
+        console.error('Error deleting elite winner from database:', error);
+        // Fallback to localStorage
+        const updatedEliteWinners = eliteWinners.filter(winner => winner.id !== eliteWinnerId);
+        setEliteWinners(updatedEliteWinners);
+        localStorage.setItem('stitchAndPitchEliteWinners', JSON.stringify(updatedEliteWinners));
+      } else {
+        // Reload elite winners from database to get the latest data
+        await loadEliteWinners();
+      }
+    } catch (error) {
+      console.error('Error connecting to database:', error);
+      // Fallback to localStorage
+      const updatedEliteWinners = eliteWinners.filter(winner => winner.id !== eliteWinnerId);
+      setEliteWinners(updatedEliteWinners);
+      localStorage.setItem('stitchAndPitchEliteWinners', JSON.stringify(updatedEliteWinners));
     }
   };
 
@@ -249,7 +355,16 @@ function App() {
     setIsPasswordModalOpen(true);
   };
 
+  const handleEliteSelected = (elite: Winner & { chatIds?: string[] }) => {
+    // Extract chat IDs from the elite object if they exist
+    const { chatIds, ...eliteData } = elite;
+    setSelectedElite(eliteData);
+    setSelectedEliteChatIds(chatIds || []);
+    setIsElitePasswordModalOpen(true);
+  };
+
   const [selectedChatIds, setSelectedChatIds] = useState<string[]>([]);
+  const [selectedEliteChatIds, setSelectedEliteChatIds] = useState<string[]>([]);
 
   const handlePasswordConfirm = async (action: 'pass' | 'fail') => {
     setIsPasswordModalOpen(false);
@@ -297,14 +412,51 @@ function App() {
     setSelectedChatIds([]);
   };
 
+  const handleElitePasswordConfirm = async (action: 'pass' | 'fail') => {
+    setIsElitePasswordModalOpen(false);
+    
+    if (action === 'pass' && selectedElite) {
+      // Create elite winner object
+      const eliteWinner: EliteWinner = {
+        ...selectedElite,
+        elite_timestamp: new Date().toISOString(),
+        elite_chat_ids: selectedEliteChatIds
+      };
+      
+      // Save to database
+      await saveEliteWinnerToDatabase(eliteWinner);
+      setCurrentEliteWinner(eliteWinner);
+      setShowEliteConfetti(true);
+      
+    } else if (action === 'fail' && selectedElite) {
+      // Show elite fail animation
+      setFailedEliteName(selectedElite.name);
+      setShowEliteFailAnimation(true);
+    }
+    
+    // Reset selected elite
+    setSelectedElite(null);
+    setSelectedEliteChatIds([]);
+  };
+
   const handleCloseWinner = () => {
     setShowConfetti(false);
     setCurrentWinner(null);
   };
 
+  const handleCloseEliteWinner = () => {
+    setShowEliteConfetti(false);
+    setCurrentEliteWinner(null);
+  };
+
   const handleCloseFail = () => {
     setShowFailAnimation(false);
     setFailedGuideName('');
+  };
+
+  const handleCloseEliteFail = () => {
+    setShowEliteFailAnimation(false);
+    setFailedEliteName('');
   };
 
   const validatePassword = (password: string): boolean => {
@@ -359,14 +511,38 @@ function App() {
             onDeleteWinner={deleteWinnerFromDatabase}
           />
         )}
+
+          {currentTab === 'elite-audit' && (
+            <ElitePitchAudit 
+              winners={winners}
+              onEliteSelected={handleEliteSelected}
+            />
+          )}
+
+          {currentTab === 'elite-winners' && (
+            <EliteWinnerHistory 
+              eliteWinners={eliteWinners}
+              onDeleteEliteWinner={deleteEliteWinnerFromDatabase}
+            />
+          )}
       </div>
 
       {/* Winner Display Overlay */}
       {currentWinner && (
+          eliteWinnerCount={eliteWinners.length}
         <WinnerDisplay
           winner={currentWinner}
           onBack={handleCloseWinner}
+          onOpenElitePitchAudit={() => setCurrentTab('elite-audit')}
         />
+        {/* Elite Winner Display Overlay */}
+        {currentEliteWinner && (
+          <EliteWinnerDisplay
+            elite={currentEliteWinner}
+            onBack={handleCloseEliteWinner}
+          />
+        )}
+
       )}
 
       {/* Password Modal */}
@@ -387,6 +563,26 @@ function App() {
         }}
         guideName={selectedGuide?.name || ''}
         chatIds={selectedChatIds}
+        {/* Elite Password Modal */}
+        <ElitePasswordModal
+          isOpen={isElitePasswordModalOpen}
+          onClose={() => {
+            setIsElitePasswordModalOpen(false);
+            setSelectedElite(null);
+            setSelectedEliteChatIds([]);
+          }}
+          onConfirm={(action) => {
+            const passwordInput = document.querySelector('input[type="password"]') as HTMLInputElement;
+            if (passwordInput && validatePassword(passwordInput.value)) {
+              handleElitePasswordConfirm(action);
+            } else {
+              alert('Invalid password. Access denied.');
+            }
+          }}
+          elite={selectedElite!}
+          chatIds={selectedEliteChatIds}
+        />
+
       />
 
       {/* New Feature Modals */}
@@ -411,6 +607,7 @@ function App() {
         onRestoreWinners={handleRestoreWinners}
       />
 
+        <ConfettiAnimation isActive={showEliteConfetti} />
       {/* Confetti Animation */}
       <ConfettiAnimation isActive={showConfetti} />
 
@@ -418,7 +615,13 @@ function App() {
       <FailAnimation 
         isActive={showFailAnimation} 
         guideName={failedGuideName}
+
+        {/* Elite Fail Animation */}
+        <EliteFailAnimation 
+          isActive={showEliteFailAnimation} 
         onClose={handleCloseFail}
+          onClose={handleCloseEliteFail}
+        />
       />
     </div>
   );

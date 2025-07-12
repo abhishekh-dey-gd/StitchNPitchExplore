@@ -1,22 +1,26 @@
 import React from 'react';
-import { Trophy, Home, BarChart3, Download, Database } from 'lucide-react';
+import { Trophy, Home, BarChart3, Download, Database, Crown } from 'lucide-react';
 
 interface NavigationProps {
   currentTab: 'selection' | 'winners';
   onTabChange: (tab: 'selection' | 'winners') => void;
   winnerCount: number;
+  eliteWinnerCount: number;
   onOpenWinHistoryDashboard: () => void;
   onOpenExportData: () => void;
   onOpenBackupRestore: () => void;
+  onOpenElitePitchAudit: () => void;
 }
 
 const Navigation: React.FC<NavigationProps> = ({
   currentTab,
   onTabChange,
   winnerCount,
+  eliteWinnerCount,
   onOpenWinHistoryDashboard,
   onOpenExportData,
-  onOpenBackupRestore
+  onOpenBackupRestore,
+  onOpenElitePitchAudit
 }) => {
   const handleLogoClick = () => {
     onTabChange('selection');
@@ -77,6 +81,20 @@ const Navigation: React.FC<NavigationProps> = ({
             {/* New Feature Buttons */}
             {winnerCount > 0 && (
               <>
+                <button
+                  onClick={onOpenElitePitchAudit}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-purple-200 hover:text-white hover:bg-white hover:bg-opacity-10 transition-all relative"
+                  title="Elite's Pitch Audit"
+                >
+                  <Crown className="w-4 h-4" />
+                  <span className="hidden sm:inline">Elite Audit</span>
+                  {eliteWinnerCount > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-yellow-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                      {eliteWinnerCount}
+                    </span>
+                  )}
+                </button>
+
                 <button
                   onClick={onOpenWinHistoryDashboard}
                   className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-purple-200 hover:text-white hover:bg-white hover:bg-opacity-10 transition-all"

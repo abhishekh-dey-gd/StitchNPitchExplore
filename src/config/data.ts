@@ -28,6 +28,11 @@ export interface Loser {
   chat_ids?: string[];
 }
 
+export interface EliteWinner extends Winner {
+  elite_timestamp: string;
+  elite_chat_ids?: string[];
+}
+
 // ==========================================
 // CONFIGURATION - EDIT THESE VALUES
 // ==========================================
